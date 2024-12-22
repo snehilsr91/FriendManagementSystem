@@ -7,6 +7,10 @@
 #define MAX_FRIENDS 10
 #define MAX_REQUESTS 10
 #define ID_LENGTH 20
+#define FILE_NAME "users.db"
+
+// Function prototype
+void loggedInMenu(int currentUserIndex);
 
 // User structure
 struct User {
@@ -23,9 +27,33 @@ struct User {
     int requestedCount;
 };
 
-// Array to store users
+// Array to store users (loaded from file)
 struct User users[MAX_USERS];
 int userCount = 0;
+
+// Function to save users data to file
+void saveUsersToFile() {
+    FILE *file = fopen(FILE_NAME, "wb");
+    if (!file) {
+        printf("Error opening file for saving data!\n");
+        return;
+    }
+    fwrite(&userCount, sizeof(int), 1, file);  // Save user count
+    fwrite(users, sizeof(struct User), userCount, file);  // Save all user data
+    fclose(file);
+}
+
+// Function to load users data from file
+void loadUsersFromFile() {
+    FILE *file = fopen(FILE_NAME, "rb");
+    if (!file) {
+        printf("No saved data found, starting fresh.\n");
+        return;
+    }
+    fread(&userCount, sizeof(int), 1, file);  // Load user count
+    fread(users, sizeof(struct User), userCount, file);  // Load all user data
+    fclose(file);
+}
 
 // Helper function to find user index by ID
 int findUserIndexByID(const char *userID) {
@@ -40,7 +68,7 @@ bool isUserIDTaken(const char *userID) {
     return findUserIndexByID(userID) != -1;
 }
 
-// Function to create a new user
+// Function to create a new user and save data to file
 void createNewUser() {
     char userID[ID_LENGTH], displayName[50], password[50];
 
@@ -66,6 +94,9 @@ void createNewUser() {
     users[userCount].requestedCount = 0;
 
     userCount++;
+
+    saveUsersToFile();  // Save updated user data to file
+
     printf("User created successfully!\n");
 }
 
@@ -102,6 +133,8 @@ void addFriend(int currentUserIndex) {
     // Add to requests and requested arrays
     strcpy(users[currentUserIndex].requested[users[currentUserIndex].requestedCount++], friendID);
     strcpy(users[friendIndex].requests[users[friendIndex].requestCount++], users[currentUserIndex].userID);
+
+    saveUsersToFile();  // Save after request
 
     printf("Friend request sent to %s!\n", users[friendIndex].displayName);
 }
@@ -154,6 +187,7 @@ void removeFriend(int currentUserIndex) {
                 break;
             }
         }
+        saveUsersToFile();  // Save after removal
         printf("Friend removed successfully.\n");
     } else {
         printf("User is not in your friend list.\n");
@@ -231,61 +265,18 @@ void checkFriendRequests(int currentUserIndex) {
             }
             users[currentUserIndex].requestCount--;
 
+            saveUsersToFile();  // Save after accepting request
             printf("Friend request accepted!\n");
         } else {
-            // Reject friend request
-            for (int i = requestIndex; i < users[currentUserIndex].requestCount - 1; i++) {
-                strcpy(users[currentUserIndex].requests[i], users[currentUserIndex].requests[i + 1]);
-            }
-            users[currentUserIndex].requestCount--;
             printf("Friend request rejected.\n");
         }
-    } while (1);
+    } while (choice != 0);
 }
 
-// Function to check requested users
-void checkRequestedUsers(int currentUserIndex) {
-    if (users[currentUserIndex].requestedCount == 0) {
-        printf("No friend requests sent.\n");
-        return;
-    }
-
-    printf("Users you have sent friend requests to:\n");
-    for (int i = 0; i < users[currentUserIndex].requestedCount; i++) {
-        printf("- UserID: %s\n", users[currentUserIndex].requested[i]);
-    }
-}
-
-// Inner menu
-void loggedInMenu(int currentUserIndex) {
-    int choice;
-    do {
-        printf("\n--- Inner Menu ---\n");
-        printf("1. Add a friend\n");
-        printf("2. Remove a friend\n");
-        printf("3. Display friends\n");
-        printf("4. Suggest friends\n");
-        printf("5. Check friend requests\n");
-        printf("6. Check requested users\n");
-        printf("7. Logout\n");
-        printf("Enter choice: ");
-        scanf("%d", &choice);
-
-        switch (choice) {
-            case 1: addFriend(currentUserIndex); break;
-            case 2: removeFriend(currentUserIndex); break;
-            case 3: displayFriends(currentUserIndex); break;
-            case 4: suggestFriends(currentUserIndex); break;
-            case 5: checkFriendRequests(currentUserIndex); break;
-            case 6: checkRequestedUsers(currentUserIndex); break;
-            case 7: printf("Logged out successfully.\n"); break;
-            default: printf("Invalid choice!\n");
-        }
-    } while (choice != 7);
-}
-
-// Function to login
+// Function to log in
 void loginUser() {
+    loadUsersFromFile();  // Load user data from file
+
     char userID[ID_LENGTH], password[50];
     printf("Enter UserID: ");
     scanf("%s", userID);
@@ -299,14 +290,42 @@ void loginUser() {
     }
 
     printf("Login successful. Welcome, %s!\n", users[userIndex].displayName);
-    loggedInMenu(userIndex);
+    loggedInMenu(userIndex);  // Call the menu
+}
+
+// Function to display the logged-in menu
+void loggedInMenu(int currentUserIndex) {
+    int choice;
+    do {
+        printf("\n--- Logged-in Menu ---\n");
+        printf("1. View friends\n");
+        printf("2. Send friend request\n");
+        printf("3. Check friend requests\n");
+        printf("4. Suggest friends\n");
+        printf("5. Remove friend\n");
+        printf("6. Logout\n");
+        printf("Enter your choice: ");
+        scanf("%d", &choice);
+
+        switch (choice) {
+            case 1: displayFriends(currentUserIndex); break;
+            case 2: addFriend(currentUserIndex); break;
+            case 3: checkFriendRequests(currentUserIndex); break;
+            case 4: suggestFriends(currentUserIndex); break;
+            case 5: removeFriend(currentUserIndex); break;
+            case 6: printf("Logged out.\n"); break;
+            default: printf("Invalid choice!\n");
+        }
+    } while (choice != 6);
 }
 
 // Main function
 int main() {
     int choice;
+    loadUsersFromFile();  // Load users from file at the start
+
     do {
-        printf("\n--- Outer Menu ---\n");
+        printf("\n--- Main Menu ---\n");
         printf("1. Check total users\n");
         printf("2. Create new user\n");
         printf("3. Login to an account\n");
@@ -322,5 +341,6 @@ int main() {
             default: printf("Invalid choice!\n");
         }
     } while (choice != 4);
+
     return 0;
 }
